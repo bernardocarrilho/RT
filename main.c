@@ -5,16 +5,33 @@
 
 #include "lista_ligada.h"
 
+////////////////////////
+///* CONFIGURATIONS *///
+////////////////////////
 
 // DEBUG=1 for debug mode
 #define DEBUG 1
 
+#define CALLS_PER_HOUR 80
+#define GP_CALL_OPERATORS 1
+#define AS_CALL_OPERATORS 1
+
+
+
+///////////////////
+///* CONSTANTS *///
+///////////////////
+
 #define RAND_MAX 2147483647
-#define ZERO 0
+#define ZERO 0.0
+
+#define LAMBDA 60.0*60*CALLS_PER_HOUR
+#define N_GP GP_CALL_OPERATORS
+#define N_AS AS_CALL_OPERATORS
 
 // Event Types
-#define CHEGADA 0
-#define PARTIDA 1
+#define ARRIVAL 0
+#define DEPARTURE 1
 
 // Call Types
 #define GP 0
@@ -43,26 +60,101 @@
 #define AS_E_AVG 60*2.5
 
 
-// Auxiliary Variables
+
+///////////////////
+///* VARIABLES *///
+///////////////////
+
 time_t seed;
 int seedAdjust;
 
 
-// Auxiliary Functions
+
+///////////////////
+///* FUNCTIONS *///
+///////////////////
+
 void initializeRandomSeed();
 void generateRandomSeed();
 int determineCallType();
 double generateCallDuration(int callType);
+double generateNextArrival();
 
 
+
+//////////////
+///* MAIN *///
+//////////////
 
 int main() {
 
+    /// INITIALIZATION ///
+    
+    lista * event_list = NULL;
+    lista * gp_queue = NULL;
+    lista * as_queue = NULL;
+    
+    double callDuration = ZERO;
+    int gp_busy = ZERO;
+    int as_busy = ZERO;
+    //int lGP = ZERO;
+    //int lAS = ZERO;
+    
     initializeRandomSeed();
+
+
+    /// PROCESSING ///
+    
+    event_list = adicionar(event_list, ARRIVAL, ZERO);
+    
+    if (event_list->tipo == ARRIVAL) {
+    
+        callDuration = generateNextArrival();
+        event_list = adicionar(event_list, ARRIVAL, event_list->tempo + callDuration);
+    
+        if (gp_busy) {
+            gp_queue = adicionar(gp_queue, ARRIVAL, event_list->tempo);
+            event_list = remover(event_list);
+        }
+        
+        else {
+        
+            if (determineCallType() == GP) {
+            
+                callDuration = generateCallDuration(GP_E);
+                event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                
+                event_list = remover(event_list);
+            }
+            
+            else {
+                
+                if (as_busy) {
+                    callDuration = generateCallDuration(AS_G);
+                    as_queue = adicionar(as_queue, ARRIVAL, event_list->tempo + callDuration);
+                    
+                    event_list = remover(event_list);
+                }
+                
+                else {
+                    callDuration = generateCallDuration(AS_G);
+                    callDuration += generateCallDuration(AS_E);
+                    event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                }
+            }
+        }
+    }
+    
+    // Ponto 3.)
 
     return 0;
 }
 
+
+
+///////////////////
+///* FUNCTIONS *///
+///////////////////
 
 // Initializes seed for random()
 void initializeRandomSeed() {
@@ -152,5 +244,21 @@ double generateCallDuration(int callType) {
         
         return d;
     }
+}
+
+
+// Generates Time Until Next Arrival
+double generateNextArrival() {
+
+    double u,c;
+
+    generateRandomSeed();
+    u = (double) ( random()+1 ) / RAND_MAX;
+    if (DEBUG) { printf("DEBUG: u=%f\n", u); }
+    
+    c = -( 1/LAMBDA ) * log(u);
+    if (DEBUG) { printf("DEBUG: c=%f\n", c); }
+    
+    return c;
 }
 
