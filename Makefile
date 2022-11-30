@@ -1,7 +1,13 @@
-make: lista_ligada_a.c lista_ligada_b.c lista_ligada_c.c
-	gcc -o ListaLigadaA lista_ligada_a.c -lm
-	gcc -o ListaLigadaB lista_ligada_b.c -lm
-	gcc -o ListaLigadaC lista_ligada_c.c -lm
+CC=gcc
+CFLAGS=-Wall -g
+
+all: main
+
+lista_ligada.o: lista_ligada.c lista_ligada.h
+	$(CC) $(CFLAGS) -c lista_ligada.c
+
+main: main.c lista_ligada.o
+	$(CC) $(CFLAGS) -o $@ $^
      
 clean:
-	rm -f ListaLigadaA ListaLigadaB ListaLigadaC
+	rm -f *.o main
