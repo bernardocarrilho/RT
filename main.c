@@ -15,6 +15,7 @@
 #define CALLS_PER_HOUR 80
 #define GP_CALL_OPERATORS 1
 #define AS_CALL_OPERATORS 1
+#define NUMBER_OF_SAMPLES 10000
 
 
 
@@ -99,53 +100,91 @@ int main() {
     int as_busy = ZERO;
     //int lGP = ZERO;
     //int lAS = ZERO;
+    int sampleNum = NUMBER_OF_SAMPLES;
     
     initializeRandomSeed();
 
 
     /// PROCESSING ///
     
-    event_list = adicionar(event_list, ARRIVAL, ZERO);
+    while (sampleNum--)
+    {
     
-    if (event_list->tipo == ARRIVAL) {
-    
-        callDuration = generateNextArrival();
-        event_list = adicionar(event_list, ARRIVAL, event_list->tempo + callDuration);
-    
-        if (gp_busy) {
-            gp_queue = adicionar(gp_queue, ARRIVAL, event_list->tempo);
-            event_list = remover(event_list);
-        }
+        event_list = adicionar(event_list, ARRIVAL, ZERO);
         
-        else {
+        if (event_list->tipo == ARRIVAL) {
         
-            if (determineCallType() == GP) {
-            
-                callDuration = generateCallDuration(GP_E);
-                event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
-                
+            callDuration = generateNextArrival();
+            event_list = adicionar(event_list, ARRIVAL, event_list->tempo + callDuration);
+        
+            if (gp_busy) {
+                gp_queue = adicionar(gp_queue, ARRIVAL, event_list->tempo);
                 event_list = remover(event_list);
             }
             
             else {
+            
+                if (determineCallType() == GP) {
                 
-                if (as_busy) {
-                    callDuration = generateCallDuration(AS_G);
-                    as_queue = adicionar(as_queue, ARRIVAL, event_list->tempo + callDuration);
+                    callDuration = generateCallDuration(GP_E);
+                    event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
                     
                     event_list = remover(event_list);
                 }
                 
                 else {
-                    callDuration = generateCallDuration(AS_G);
-                    callDuration += generateCallDuration(AS_E);
-                    event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                    
+                    if (as_busy) {
+                        callDuration = generateCallDuration(AS_G);
+                        as_queue = adicionar(as_queue, ARRIVAL, event_list->tempo + callDuration);
+                        
+                        event_list = remover(event_list);
+                    }
+                    
+                    else {
+                        callDuration = generateCallDuration(AS_G);
+                        callDuration += generateCallDuration(AS_E);
+                        event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                    }
                 }
             }
         }
+        
+        else {
+            
+            if (gp_queue) {
+            
+                if (determineCallType() == GP) {
+                    callDuration = generateCallDuration(GP_E);
+                    event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                
+                    gp_queue = remover(gp_queue);
+                }
+                
+                else {
+                
+                    if (as_busy) {
+                    
+                        callDuration = generateCallDuration(AS_G);
+                        as_queue = adicionar(as_queue, ARRIVAL, event_list->tempo + callDuration); 
+                    
+                        event_list = remover(event_list);
+                    }
+                    
+                    else {
+                    
+                        callDuration = generateCallDuration(AS_E);
+                        callDuration += generateCallDuration(AS_G);
+                        event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration); 
+                    
+                        gp_queue = remover(gp_queue);
+                    }
+                }
+            }
+            
+            event_list = remover(event_list);
+        }
     }
-    
-    // Ponto 3.)
 
     return 0;
 }
