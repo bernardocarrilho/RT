@@ -14,7 +14,6 @@
 #define CALLS_PER_HOUR 80
 #define GP_CALL_OPERATORS 1
 #define AS_CALL_OPERATORS 1
-#define FIC_CALL_OPERATORS 1
 #define NUMBER_OF_SAMPLES 3
 
 
@@ -108,10 +107,8 @@ int main() {
     double callDuration = ZERO;
     int gp_busy = ZERO;
     int as_busy = ZERO;
-    int fic_busy = ZERO;
     int lGP = ZERO;
     int lAS = ZERO;
-    int lFIC = ZERO;
     int sampleNum = NUMBER_OF_SAMPLES;
     
     initializeRandomSeed();
@@ -122,31 +119,31 @@ int main() {
     callType = determineCallType();
     event_list = adicionar(event_list, callType, ZERO);
     
-    while (event_list)
+    while ( event_list || gp_queue || as_queue )
     {
         
         if ( (event_list->tipo == ARRIVAL_GP) || (event_list->tipo == ARRIVAL_AS) ) {
-        
-            if ( (sampleNum--) > ZERO ) {
-            
+printf("1\n");        
+            if ( (--sampleNum) > ZERO ) {
+printf("2\n");            
                 callType = determineCallType();
                 callDuration = generateNextArrival();
                 event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
             }
             
             if ( gp_queue ) {
-            
+printf("3\n");            
                 callType = event_list->tipo;
                 callDuration = event_list->tempo;
                 gp_queue = adicionar(gp_queue, callType, callDuration);
             }
             
             else {
-            
+printf("4\n");            
                 if ( event_list->tipo == ARRIVAL_GP ) {
-                
+printf("5\n");                
                     if ( !gp_busy ) {
-                    
+printf("6\n");                    
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -154,7 +151,7 @@ int main() {
                     }
                     
                     else {
-                    
+printf("7\n");                    
                         callType = event_list->tipo;
                         callDuration = event_list->tempo;
                         gp_queue = adicionar(gp_queue, callType, callDuration);
@@ -162,17 +159,17 @@ int main() {
                 }
                 
                 else {
-                
-                    if ( !fic_busy ) {
-                    
+printf("8\n");                
+                    if ( !gp_busy ) {
+printf("9\n");                    
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
-                        lFIC++;
+                        lGP++;
                     }
                     
                     else {
-                    
+printf("10\n");                    
                         callType = event_list->tipo;
                         callDuration = event_list->tempo;
                         gp_queue = adicionar(gp_queue, callType, callDuration);
@@ -182,13 +179,13 @@ int main() {
         }
         
         else {
-        
+printf("11\n");        
             if ( event_list->tipo == DEPARTURE_GP ) {
-            
+printf("12\n");
                 if ( gp_queue ) {
-                
+printf("13\n");                
                     if ( gp_queue->tipo == ARRIVAL_GP ) {
-                    
+printf("14\n");                    
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -203,9 +200,9 @@ int main() {
             }
             
             else if ( event_list->tipo == DEPARTURE_AS ) {
-            
+printf("15\n");
                 if ( as_queue ) {
-                
+printf("16\n");
                     callType = DEPARTURE_AS;
                     callDuration = generateCallDuration(AS_E);
                     event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -217,11 +214,11 @@ int main() {
             }
             
             else {
-            
+printf("17\n");
                 if ( gp_queue ) {
-                
+printf("18\n");                
                     if ( gp_queue->tipo == ARRIVAL_AS ) {
-                    
+printf("19\n");                    
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -229,18 +226,18 @@ int main() {
                         gp_queue = remover(gp_queue);
                     }
                     
-                    else { lFIC--; }
+                    else { lGP--; }
                 }
                 
-                else { lFIC--; }
+                else { lGP--; }
             }
             
             if ( gp_queue ) {
-            
+printf("20\n");
                 if ( gp_queue->tipo == ARRIVAL_GP ) {
-                
+printf("21\n");
                     if ( !gp_busy ) {
-                        
+printf("22\n");
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -251,13 +248,13 @@ int main() {
                 }
                 
                 else {
-                
-                    if ( !fic_busy ) {
-                        
+printf("23\n");
+                    if ( !gp_busy ) {
+printf("24\n");
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
-                        lFIC++;
+                        lGP++;
                         
                         gp_queue = remover(gp_queue);
                     }
@@ -265,9 +262,9 @@ int main() {
             }
             
             if ( as_queue ) {
-            
+printf("25\n");
                 if ( !as_busy ) {
-                        
+printf("26\n");
                     callType = DEPARTURE_AS;
                     callDuration = generateCallDuration(AS_E);
                     event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -278,6 +275,36 @@ int main() {
             }
         }
         
+        if ( !gp_busy && gp_queue ) {
+printf("27\n");        
+            if ( gp_queue->tipo == ARRIVAL_GP ) {
+printf("28\n");                   
+                callType = DEPARTURE_GP;
+                callDuration = generateCallDuration(GP_E);
+                event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                        
+                gp_queue = remover(gp_queue);
+            }
+            
+            else {
+printf("29\n");                   
+                callType = DEPARTURE_FIC;
+                callDuration = generateCallDuration(AS_G);
+                event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                        
+                gp_queue = remover(gp_queue);
+            }
+        }
+        
+        if ( !as_busy && as_queue ) {
+printf("30\n");        
+            callType = DEPARTURE_AS;
+            callDuration = generateCallDuration(AS_E);
+            event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                        
+            as_queue = remover(as_queue);
+        }
+        
         event_list = remover(event_list);
         
         
@@ -286,9 +313,6 @@ int main() {
         
         if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
         else { as_busy = FALSE; }
-        
-        if (lAS >= FIC_CALL_OPERATORS) { fic_busy = TRUE; }
-        else { fic_busy = FALSE; }
     
     
         if (DEBUG && TRUE) {
@@ -327,6 +351,7 @@ int main() {
     return 0;
 }
 // Falta filas finita e infinita
+// Check busy variables before checking if busy 
 
 
 ///////////////////
