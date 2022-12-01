@@ -15,7 +15,7 @@
 #define CALLS_PER_HOUR 80
 #define GP_CALL_OPERATORS 1
 #define AS_CALL_OPERATORS 1
-#define NUMBER_OF_SAMPLES 10000
+#define NUMBER_OF_SAMPLES 3
 
 
 
@@ -25,6 +25,9 @@
 
 #define RAND_MAX 2147483647
 #define ZERO 0.0
+
+#define FALSE 0
+#define TRUE 1
 
 #define LAMBDA 60.0*60*CALLS_PER_HOUR
 #define N_GP GP_CALL_OPERATORS
@@ -98,8 +101,8 @@ int main() {
     double callDuration = ZERO;
     int gp_busy = ZERO;
     int as_busy = ZERO;
-    //int lGP = ZERO;
-    //int lAS = ZERO;
+    int lGP = ZERO;
+    int lAS = ZERO;
     int sampleNum = NUMBER_OF_SAMPLES;
     
     initializeRandomSeed();
@@ -107,16 +110,19 @@ int main() {
 
     /// PROCESSING ///
     
-    while (sampleNum--)
-    {
+    event_list = adicionar(event_list, ARRIVAL, ZERO);
     
-        event_list = adicionar(event_list, ARRIVAL, ZERO);
+    while (event_list)
+    {
         
         if (event_list->tipo == ARRIVAL) {
         
-            callDuration = generateNextArrival();
-            event_list = adicionar(event_list, ARRIVAL, event_list->tempo + callDuration);
-        
+            if ( (sampleNum--) > ZERO ) {
+            
+                callDuration = generateNextArrival();
+                event_list = adicionar(event_list, ARRIVAL, event_list->tempo + callDuration);
+            }
+            
             if (gp_busy) {
                 gp_queue = adicionar(gp_queue, ARRIVAL, event_list->tempo);
                 event_list = remover(event_list);
@@ -128,6 +134,7 @@ int main() {
                 
                     callDuration = generateCallDuration(GP_E);
                     event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                    lGP++;
                     
                     event_list = remover(event_list);
                 }
@@ -145,6 +152,7 @@ int main() {
                         callDuration = generateCallDuration(AS_G);
                         callDuration += generateCallDuration(AS_E);
                         event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                        lAS++; // lAS demasiado cedo e falta lGP
                     }
                 }
             }
@@ -157,6 +165,7 @@ int main() {
                 if (determineCallType() == GP) {
                     callDuration = generateCallDuration(GP_E);
                     event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration);
+                    lGP++;
                 
                     gp_queue = remover(gp_queue);
                 }
@@ -176,14 +185,55 @@ int main() {
                         callDuration = generateCallDuration(AS_E);
                         callDuration += generateCallDuration(AS_G);
                         event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration); 
+                        lAS++;
                     
                         gp_queue = remover(gp_queue);
                     }
                 }
             }
-            
-            event_list = remover(event_list);
         }
+        
+        event_list = remover(event_list);
+        
+        
+        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
+        else { gp_busy = FALSE; }
+        
+        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
+        else { as_busy = FALSE; }
+    
+    
+        if (DEBUG && TRUE) {
+        
+            printf("\n\nEVENT LIST:\n");
+            imprimir (event_list);
+            
+            
+            printf("\n\nGP QUEUE:\n");
+            imprimir (gp_queue);
+            
+            
+            printf("\n\nAS QUEUE:\n");
+            imprimir (as_queue);
+            
+            printf("\n\n--------------------------------\n\n");
+        }
+    }
+    
+    if (DEBUG && FALSE) {
+        
+        printf("\n\nEVENT LIST:\n");
+        imprimir (event_list);
+        
+        
+        printf("\n\nGP QUEUE:\n");
+        imprimir (gp_queue);
+        
+        
+        printf("\n\nAS QUEUE:\n");
+        imprimir (as_queue);
+        
+        printf("\n\n");
     }
 
     return 0;
@@ -201,6 +251,7 @@ void initializeRandomSeed() {
     seed = time(NULL);
     seedAdjust = ZERO;
     
+    if (DEBUG && TRUE) { seed = 1669899191; }
     if (DEBUG) { printf("DEBUG: seed=%ld\n", seed); }
     
     return;
