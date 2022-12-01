@@ -176,8 +176,6 @@ int main() {
                     
                         callDuration = generateCallDuration(AS_G);
                         as_queue = adicionar(as_queue, ARRIVAL, event_list->tempo + callDuration); 
-                    
-                        event_list = remover(event_list);
                     }
                     
                     else {
@@ -186,9 +184,10 @@ int main() {
                         callDuration += generateCallDuration(AS_G);
                         event_list = adicionar(event_list, DEPARTURE, event_list->tempo + callDuration); 
                         lAS++;
-                    
-                        gp_queue = remover(gp_queue);
                     }
+                    
+                    gp_queue = remover(gp_queue);
+                    lGP--;
                 }
             }
         }
@@ -238,7 +237,9 @@ int main() {
 
     return 0;
 }
-
+// Falta filas finita e infinita
+// Não estão eventos a sair de ASWQ
+    // Faltam os lAS--
 
 
 ///////////////////
