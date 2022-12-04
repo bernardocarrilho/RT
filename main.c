@@ -14,6 +14,7 @@
 #define CALLS_PER_HOUR 80
 #define GP_CALL_OPERATORS 1
 #define AS_CALL_OPERATORS 1
+#define GP_QUEUE_LENGTH 5
 #define NUMBER_OF_SAMPLES 3
 
 
@@ -65,7 +66,7 @@
 #define AS_G_DEV 60*(1/3.0)
 
 #define AS_E_MIN 60*1
-#define AS_E_MAX 999 // No Limit? ///////////////////////////////////
+#define AS_E_MAX 60*5//999 // No Limit? ///////////////////////////////////
 #define AS_E_AVG 60*2.5
 
 
@@ -76,6 +77,9 @@
 
 time_t seed;
 int seedAdjust;
+
+double avg;
+float avg_count;
 
 
 
@@ -88,6 +92,7 @@ void generateRandomSeed();
 int determineCallType();
 double generateCallDuration(int callType);
 double generateNextArrival();
+void updateAverage(double timeDiff);
 
 
 
@@ -109,7 +114,11 @@ int main() {
     int as_busy = ZERO;
     int lGP = ZERO;
     int lAS = ZERO;
+    int gp_filled = ZERO;
+    int nGP = ZERO;
     int sampleNum = NUMBER_OF_SAMPLES;
+    avg = ZERO;
+    avg_count = ZERO;
     
     initializeRandomSeed();
 
@@ -123,72 +132,94 @@ int main() {
     {
         
         if ( (event_list->tipo == ARRIVAL_GP) || (event_list->tipo == ARRIVAL_AS) ) {
-printf("1\n");        
+
             if ( (--sampleNum) > ZERO ) {
-printf("2\n");            
+
                 callType = determineCallType();
                 callDuration = generateNextArrival();
                 event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
             }
             
             if ( gp_queue ) {
-printf("3\n");            
-                callType = event_list->tipo;
-                callDuration = event_list->tempo;
-                gp_queue = adicionar(gp_queue, callType, callDuration);
+
+                if ( !gp_filled ) {  
+                
+                    callType = event_list->tipo;
+                    callDuration = event_list->tempo;
+                    gp_queue = adicionar(gp_queue, callType, callDuration);
+                    
+                    nGP++;
+                }
             }
             
             else {
-printf("4\n");            
+
                 if ( event_list->tipo == ARRIVAL_GP ) {
-printf("5\n");                
+
                     if ( !gp_busy ) {
-printf("6\n");                    
+
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                        
                         lGP++;
+                        updateAverage(ZERO);
+                        
                     }
                     
                     else {
-printf("7\n");                    
-                        callType = event_list->tipo;
-                        callDuration = event_list->tempo;
-                        gp_queue = adicionar(gp_queue, callType, callDuration);
+
+                        if ( !gp_filled ) {    
+                          
+                            callType = event_list->tipo;
+                            callDuration = event_list->tempo;
+                            gp_queue = adicionar(gp_queue, callType, callDuration);
+                            
+                            nGP++;
+                        }
                     }
                 }
                 
                 else {
-printf("8\n");                
+
                     if ( !gp_busy ) {
-printf("9\n");                    
+
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                        
                         lGP++;
+                        updateAverage(ZERO);
                     }
                     
                     else {
-printf("10\n");                    
-                        callType = event_list->tipo;
-                        callDuration = event_list->tempo;
-                        gp_queue = adicionar(gp_queue, callType, callDuration);
+
+                        if ( !gp_filled ) { 
+                        
+                            callType = event_list->tipo;
+                            callDuration = event_list->tempo;
+                            gp_queue = adicionar(gp_queue, callType, callDuration);
+                            
+                            nGP++;
+                        }
                     }
                 }
             }
         }
         
         else {
-printf("11\n");        
+
             if ( event_list->tipo == DEPARTURE_GP ) {
-printf("12\n");
+
                 if ( gp_queue ) {
-printf("13\n");                
+
                     if ( gp_queue->tipo == ARRIVAL_GP ) {
-printf("14\n");                    
+
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                        
+                        updateAverage(event_list->tempo - gp_queue->tempo);
                         
                         gp_queue = remover(gp_queue);
                     }
@@ -200,9 +231,9 @@ printf("14\n");
             }
             
             else if ( event_list->tipo == DEPARTURE_AS ) {
-printf("15\n");
+
                 if ( as_queue ) {
-printf("16\n");
+
                     callType = DEPARTURE_AS;
                     callDuration = generateCallDuration(AS_E);
                     event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -214,57 +245,92 @@ printf("16\n");
             }
             
             else {
-printf("17\n");
+
                 if ( gp_queue ) {
-printf("18\n");                
+
                     if ( gp_queue->tipo == ARRIVAL_AS ) {
-printf("19\n");                    
+
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                         
+                        updateAverage(event_list->tempo - gp_queue->tempo);
+                        
                         gp_queue = remover(gp_queue);
+                        nGP--;
                     }
                     
                     else { lGP--; }
                 }
                 
                 else { lGP--; }
+                
+                if ( as_queue ) {
+
+                    callType = ARRIVAL_AS;
+                    callDuration = ZERO;
+                    as_queue = adicionar(as_queue, callType, event_list->tempo + callDuration);
+                }
+                
+                else {
+                
+                    if ( !as_busy ) {
+
+                        callType = DEPARTURE_AS;
+                        callDuration = generateCallDuration(AS_E);
+                        event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                    
+                        lAS++;
+                    }
+                    
+                    else {
+
+                        callType = ARRIVAL_AS;
+                        callDuration = ZERO;
+                        as_queue = adicionar(as_queue, callType, event_list->tempo + callDuration);
+                    }
+                }
             }
             
             if ( gp_queue ) {
-printf("20\n");
+
                 if ( gp_queue->tipo == ARRIVAL_GP ) {
-printf("21\n");
+
                     if ( !gp_busy ) {
-printf("22\n");
+
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                         lGP++;
                         
+                        updateAverage(event_list->tempo - gp_queue->tempo);
+                        
                         gp_queue = remover(gp_queue);
+                        nGP--;
                     }
                 }
                 
                 else {
-printf("23\n");
+
                     if ( !gp_busy ) {
-printf("24\n");
+
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                         lGP++;
                         
+                        updateAverage(event_list->tempo - gp_queue->tempo);
+                        
                         gp_queue = remover(gp_queue);
+                        nGP--;
                     }
                 }
             }
             
             if ( as_queue ) {
-printf("25\n");
+
                 if ( !as_busy ) {
-printf("26\n");
+
                     callType = DEPARTURE_AS;
                     callDuration = generateCallDuration(AS_E);
                     event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -275,29 +341,46 @@ printf("26\n");
             }
         }
         
+        
+        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
+        else { gp_busy = FALSE; }
+        
+        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
+        else { as_busy = FALSE; }
+        
+        if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
+        else { gp_filled = FALSE; }
+        
+        
         if ( !gp_busy && gp_queue ) {
-printf("27\n");        
+
             if ( gp_queue->tipo == ARRIVAL_GP ) {
-printf("28\n");                   
+
                 callType = DEPARTURE_GP;
                 callDuration = generateCallDuration(GP_E);
                 event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                
+                updateAverage(event_list->tempo - gp_queue->tempo);
                         
                 gp_queue = remover(gp_queue);
+                nGP--;
             }
             
             else {
-printf("29\n");                   
+
                 callType = DEPARTURE_FIC;
                 callDuration = generateCallDuration(AS_G);
                 event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                         
+                updateAverage(event_list->tempo - gp_queue->tempo);
+                        
                 gp_queue = remover(gp_queue);
+                nGP--;
             }
         }
         
         if ( !as_busy && as_queue ) {
-printf("30\n");        
+       
             callType = DEPARTURE_AS;
             callDuration = generateCallDuration(AS_E);
             event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
@@ -306,13 +389,6 @@ printf("30\n");
         }
         
         event_list = remover(event_list);
-        
-        
-        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
-        else { gp_busy = FALSE; }
-        
-        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
-        else { as_busy = FALSE; }
     
     
         if (DEBUG && TRUE) {
@@ -327,6 +403,11 @@ printf("30\n");
             
             printf("\n\nAS QUEUE:\n");
             imprimir (as_queue);
+            
+            
+            printf("\n\nAVG=%f\n", avg);
+            printf("AVG COUNT=%f\n", avg_count);
+            
             
             printf("\n\n--------------------------------\n\n");
         }
@@ -350,8 +431,6 @@ printf("30\n");
 
     return 0;
 }
-// Falta filas finita e infinita
-// Check busy variables before checking if busy 
 
 
 ///////////////////
@@ -463,5 +542,13 @@ double generateNextArrival() {
     if (DEBUG) { printf("DEBUG: c=%f\n", c); }
     
     return c;
+}
+
+void updateAverage(double timeDiff) {
+
+    avg_count++;
+    avg = avg * ((avg_count-1)/avg_count) + (timeDiff) * (1/avg_count);
+
+    return;
 }
 
