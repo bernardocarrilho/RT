@@ -9,13 +9,13 @@
 ///* CONFIGURATIONS *///
 ////////////////////////
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define CALLS_PER_HOUR 80
-#define GP_CALL_OPERATORS 1
-#define AS_CALL_OPERATORS 1
-#define GP_QUEUE_LENGTH 5
-#define NUMBER_OF_SAMPLES 3
+#define GP_CALL_OPERATORS 12
+#define AS_CALL_OPERATORS 7
+#define GP_QUEUE_LENGTH 1
+#define NUMBER_OF_SAMPLES 10000
 
 
 
@@ -29,7 +29,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#define LAMBDA 60.0*60*CALLS_PER_HOUR
+#define LAMBDA CALLS_PER_HOUR/60.0/60
 #define N_GP GP_CALL_OPERATORS
 #define N_AS AS_CALL_OPERATORS
 
@@ -66,7 +66,7 @@
 #define AS_G_DEV 60*(1/3.0)
 
 #define AS_E_MIN 60*1
-#define AS_E_MAX 60*5//999 // No Limit? ///////////////////////////////////
+#define AS_E_MAX 999//60*5 // No Limit? ///////////////////////////////////
 #define AS_E_AVG 60*2.5
 
 
@@ -80,6 +80,7 @@ int seedAdjust;
 
 double avg;
 float avg_count;
+double avgDelay;
 
 
 
@@ -107,6 +108,7 @@ int main() {
     lista * event_list = NULL;
     lista * gp_queue = NULL;
     lista * as_queue = NULL;
+    lista * avg_aux = NULL;
     
     int callType = ZERO;
     double callDuration = ZERO;
@@ -120,43 +122,77 @@ int main() {
     avg = ZERO;
     avg_count = ZERO;
     
+    double probDelay = ZERO;
+    double probLost = ZERO;
+    avgDelay = ZERO;
+    double asAvg = ZERO;
+    int asSampleNum = ZERO;
+    
     initializeRandomSeed();
 
 
     /// PROCESSING ///
     
+    if (DEBUG) { printf("1\n"); }
     callType = determineCallType();
     event_list = adicionar(event_list, callType, ZERO);
     
+    if ( callType == ARRIVAL_AS ) { avg_aux = adicionar(avg_aux, callType, ZERO); asSampleNum++; }
+    
     while ( event_list || gp_queue || as_queue )
     {
+    
+        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
+        else { gp_busy = FALSE; }
+        
+        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
+        else { as_busy = FALSE; }
+        
+        if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
+        else { gp_filled = FALSE; }
         
         if ( (event_list->tipo == ARRIVAL_GP) || (event_list->tipo == ARRIVAL_AS) ) {
+            if (DEBUG) { printf("2\n"); }
 
             if ( (--sampleNum) > ZERO ) {
+                if (DEBUG) { printf("2.1\n"); }
 
                 callType = determineCallType();
                 callDuration = generateNextArrival();
                 event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                
+                if ( callType == ARRIVAL_AS ) { avg_aux = adicionar(avg_aux, callType, event_list->tempo + callDuration); asSampleNum++; }
             }
             
             if ( gp_queue ) {
+                if (DEBUG) { printf("2.2\n"); }
 
                 if ( !gp_filled ) {  
+                    if (DEBUG) { printf("2.2.1\n"); }
                 
                     callType = event_list->tipo;
                     callDuration = event_list->tempo;
                     gp_queue = adicionar(gp_queue, callType, callDuration);
                     
+                    probDelay++;
                     nGP++;
+                }
+                
+                else {
+                
+                    probLost++;
+                    if ( event_list->tipo == ARRIVAL_AS ) { avg_aux = remover(avg_aux); asSampleNum--; }
                 }
             }
             
             else {
+                if (DEBUG) { printf("2.3\n"); }
 
                 if ( event_list->tipo == ARRIVAL_GP ) {
+                    if (DEBUG) { printf("2.3.1\n"); }
 
                     if ( !gp_busy ) {
+                        if (DEBUG) { printf("2.3.1.1\n"); }
 
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
@@ -168,6 +204,7 @@ int main() {
                     }
                     
                     else {
+                        if (DEBUG) { printf("2.3.1.2\n"); }
 
                         if ( !gp_filled ) {    
                           
@@ -175,14 +212,23 @@ int main() {
                             callDuration = event_list->tempo;
                             gp_queue = adicionar(gp_queue, callType, callDuration);
                             
+                            probDelay++;
                             nGP++;
+                        }
+                        
+                        else {
+                
+                            probLost++;
+                            if ( event_list->tipo == ARRIVAL_AS ) { avg_aux = remover(avg_aux); asSampleNum--; }
                         }
                     }
                 }
                 
                 else {
+                    if (DEBUG) { printf("2.3.2\n"); }
 
                     if ( !gp_busy ) {
+                        if (DEBUG) { printf("2.3.2.1\n"); }
 
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
@@ -193,6 +239,7 @@ int main() {
                     }
                     
                     else {
+                        if (DEBUG) { printf("2.3.2.2\n"); }
 
                         if ( !gp_filled ) { 
                         
@@ -200,7 +247,14 @@ int main() {
                             callDuration = event_list->tempo;
                             gp_queue = adicionar(gp_queue, callType, callDuration);
                             
+                            probDelay++;
                             nGP++;
+                        }
+                        
+                        else {
+                
+                            probLost++;
+                            if ( event_list->tipo == ARRIVAL_AS ) { avg_aux = remover(avg_aux); asSampleNum--; }
                         }
                     }
                 }
@@ -208,12 +262,16 @@ int main() {
         }
         
         else {
+            if (DEBUG) { printf("3\n"); }
 
             if ( event_list->tipo == DEPARTURE_GP ) {
+                if (DEBUG) { printf("3.1\n"); }
 
                 if ( gp_queue ) {
+                    if (DEBUG) { printf("3.1.1\n"); }
 
                     if ( gp_queue->tipo == ARRIVAL_GP ) {
+                        if (DEBUG) { printf("3.1.1.1\n"); }
 
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
@@ -222,6 +280,7 @@ int main() {
                         updateAverage(event_list->tempo - gp_queue->tempo);
                         
                         gp_queue = remover(gp_queue);
+                        nGP--;
                     }
                     
                     else { lGP--; }
@@ -231,12 +290,17 @@ int main() {
             }
             
             else if ( event_list->tipo == DEPARTURE_AS ) {
+                if (DEBUG) { printf("3.2\n"); }
 
                 if ( as_queue ) {
+                    if (DEBUG) { printf("3.2.1\n"); }
 
                     callType = DEPARTURE_AS;
                     callDuration = generateCallDuration(AS_E);
                     event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
+                    
+                    asAvg += event_list->tempo - avg_aux->tempo;
+                    avg_aux = remover(avg_aux);
                         
                     as_queue = remover(as_queue);
                 }
@@ -245,10 +309,13 @@ int main() {
             }
             
             else {
+                if (DEBUG) { printf("3.3\n"); }
 
                 if ( gp_queue ) {
+                    if (DEBUG) { printf("3.3.1\n"); }
 
                     if ( gp_queue->tipo == ARRIVAL_AS ) {
+                        if (DEBUG) { printf("3.3.1.1\n"); }
 
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
@@ -266,6 +333,7 @@ int main() {
                 else { lGP--; }
                 
                 if ( as_queue ) {
+                    if (DEBUG) { printf("3.3.2\n"); }
 
                     callType = ARRIVAL_AS;
                     callDuration = ZERO;
@@ -273,17 +341,23 @@ int main() {
                 }
                 
                 else {
+                    if (DEBUG) { printf("3.3.3\n"); }
                 
                     if ( !as_busy ) {
+                        if (DEBUG) { printf("3.3.3.1\n"); }
 
                         callType = DEPARTURE_AS;
                         callDuration = generateCallDuration(AS_E);
                         event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                     
+                        asAvg += event_list->tempo - avg_aux->tempo;
+                        avg_aux = remover(avg_aux);
+                    
                         lAS++;
                     }
                     
                     else {
+                        if (DEBUG) { printf("3.3.3.2\n"); }
 
                         callType = ARRIVAL_AS;
                         callDuration = ZERO;
@@ -293,10 +367,13 @@ int main() {
             }
             
             if ( gp_queue ) {
+                if (DEBUG) { printf("3.4.1\n"); }
 
                 if ( gp_queue->tipo == ARRIVAL_GP ) {
+                    if (DEBUG) { printf("3.4.1.1\n"); }
 
                     if ( !gp_busy ) {
+                        if (DEBUG) { printf("3.4.1.1.1\n"); }
 
                         callType = DEPARTURE_GP;
                         callDuration = generateCallDuration(GP_E);
@@ -311,8 +388,10 @@ int main() {
                 }
                 
                 else {
+                    if (DEBUG) { printf("3.4.1.2\n"); }
 
                     if ( !gp_busy ) {
+                        if (DEBUG) { printf("3.4.1.2.1\n"); }
 
                         callType = DEPARTURE_FIC;
                         callDuration = generateCallDuration(AS_G);
@@ -328,13 +407,18 @@ int main() {
             }
             
             if ( as_queue ) {
+                if (DEBUG) { printf("3.4.2\n"); }
 
                 if ( !as_busy ) {
+                    if (DEBUG) { printf("3.4.2.1\n"); }
 
                     callType = DEPARTURE_AS;
                     callDuration = generateCallDuration(AS_E);
                     event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                     lAS++;
+                        
+                    asAvg += event_list->tempo - avg_aux->tempo;
+                    avg_aux = remover(avg_aux);
                         
                     as_queue = remover(as_queue);
                 }
@@ -353,8 +437,10 @@ int main() {
         
         
         if ( !gp_busy && gp_queue ) {
+            if (DEBUG) { printf("4.1\n"); }
 
             if ( gp_queue->tipo == ARRIVAL_GP ) {
+                if (DEBUG) { printf("4.1.1\n"); }
 
                 callType = DEPARTURE_GP;
                 callDuration = generateCallDuration(GP_E);
@@ -367,6 +453,7 @@ int main() {
             }
             
             else {
+                if (DEBUG) { printf("4.1.2\n"); }
 
                 callType = DEPARTURE_FIC;
                 callDuration = generateCallDuration(AS_G);
@@ -380,15 +467,28 @@ int main() {
         }
         
         if ( !as_busy && as_queue ) {
+            if (DEBUG) { printf("4.2\n"); }
        
             callType = DEPARTURE_AS;
             callDuration = generateCallDuration(AS_E);
             event_list = adicionar(event_list, callType, event_list->tempo + callDuration);
                         
+            asAvg += event_list->tempo - avg_aux->tempo;
+            avg_aux = remover(avg_aux);
+                        
             as_queue = remover(as_queue);
         }
         
         event_list = remover(event_list);
+        
+        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
+        else { gp_busy = FALSE; }
+        
+        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
+        else { as_busy = FALSE; }
+        
+        if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
+        else { gp_filled = FALSE; }
     
     
         if (DEBUG && TRUE) {
@@ -405,8 +505,17 @@ int main() {
             imprimir (as_queue);
             
             
+            printf("\n\nAS AVG:\n");
+            imprimir (avg_aux);
+            
+            
             printf("\n\nAVG=%f\n", avg);
-            printf("AVG COUNT=%f\n", avg_count);
+            printf("AVG COUNT=%f\n\n", avg_count);
+            
+            printf("P(Delay) = %f\n", probDelay);
+            printf("P(Lost) = %f\n", probLost);
+            printf("Delay (Average) = %f\n", avgDelay);
+            printf("AS Delay (Average) = %f\n", asAvg);
             
             
             printf("\n\n--------------------------------\n\n");
@@ -428,6 +537,34 @@ int main() {
         
         printf("\n\n");
     }
+    
+    
+    /// STATISTCS ///
+    
+    probDelay /= NUMBER_OF_SAMPLES;
+    probLost /= NUMBER_OF_SAMPLES;
+    asAvg /= asSampleNum;
+    
+    
+    /// PRINTING ///
+    
+    printf("---INPUT---\n\n");
+    
+    printf("CALLS_PER_HOUR=%d\n", CALLS_PER_HOUR);
+    printf("GP_CALL_OPERATORS=%d\n", GP_CALL_OPERATORS);
+    printf("AS_CALL_OPERATORS=%d\n", AS_CALL_OPERATORS);
+    printf("GP_QUEUE_LENGTH=%d\n", GP_QUEUE_LENGTH);
+    printf("NUMBER_OF_SAMPLES=%d\n", NUMBER_OF_SAMPLES);
+    printf("\n\n");
+    
+    
+    printf("---OUTPUT---\n\n");
+    
+    printf("P(Delay) = %f\n", probDelay);
+    printf("P(Lost) = %f\n", probLost);
+    printf("Delay (Average) = %f\n", avgDelay);
+    printf("AS Delay (Average) = %f\n", asAvg);
+    printf("\n\n");
 
     return 0;
 }
@@ -443,7 +580,7 @@ void initializeRandomSeed() {
     seed = time(NULL);
     seedAdjust = ZERO;
     
-    if (DEBUG && TRUE) { seed = 1669899191; }
+    if (DEBUG && FALSE) { seed = 1669899191; }
     if (DEBUG) { printf("DEBUG: seed=%ld\n", seed); }
     
     return;
@@ -537,8 +674,8 @@ double generateNextArrival() {
     generateRandomSeed();
     u = (double) ( random()+1 ) / RAND_MAX;
     if (DEBUG) { printf("DEBUG: u=%f\n", u); }
-    
-    c = -( 1/LAMBDA ) * log(u);
+
+    c = -( 1.0/(LAMBDA) ) * log(u);
     if (DEBUG) { printf("DEBUG: c=%f\n", c); }
     
     return c;
@@ -548,6 +685,8 @@ void updateAverage(double timeDiff) {
 
     avg_count++;
     avg = avg * ((avg_count-1)/avg_count) + (timeDiff) * (1/avg_count);
+    
+    if ( timeDiff > ZERO ) { avgDelay += timeDiff; }
 
     return;
 }
