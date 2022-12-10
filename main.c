@@ -13,7 +13,7 @@
 
 #define CALLS_PER_HOUR 80
 #define GP_CALL_OPERATORS 12
-#define AS_CALL_OPERATORS 7
+#define AS_CALL_OPERATORS 6
 #define GP_QUEUE_LENGTH 1
 #define NUMBER_OF_SAMPLES 10000
 
@@ -82,6 +82,13 @@ double avg;
 float avg_count;
 double avgDelay;
 
+int gp_busy;
+int as_busy;
+int lGP;
+int lAS;
+int gp_filled;
+int nGP;
+
 
 
 ///////////////////
@@ -94,6 +101,7 @@ int determineCallType();
 double generateCallDuration(int callType);
 double generateNextArrival();
 void updateAverage(double timeDiff);
+void updateVariables();
 
 
 
@@ -112,12 +120,12 @@ int main() {
     
     int callType = ZERO;
     double callDuration = ZERO;
-    int gp_busy = ZERO;
-    int as_busy = ZERO;
-    int lGP = ZERO;
-    int lAS = ZERO;
-    int gp_filled = ZERO;
-    int nGP = ZERO;
+    gp_busy = ZERO;
+    as_busy = ZERO;
+    lGP = ZERO;
+    lAS = ZERO;
+    gp_filled = ZERO;
+    nGP = ZERO;
     int sampleNum = NUMBER_OF_SAMPLES;
     avg = ZERO;
     avg_count = ZERO;
@@ -142,14 +150,7 @@ int main() {
     while ( event_list || gp_queue || as_queue )
     {
     
-        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
-        else { gp_busy = FALSE; }
-        
-        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
-        else { as_busy = FALSE; }
-        
-        if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
-        else { gp_filled = FALSE; }
+        updateVariables();
         
         if ( (event_list->tipo == ARRIVAL_GP) || (event_list->tipo == ARRIVAL_AS) ) {
             if (DEBUG) { printf("2\n"); }
@@ -262,6 +263,8 @@ int main() {
         }
         
         else {
+            updateVariables();
+            
             if (DEBUG) { printf("3\n"); }
 
             if ( event_list->tipo == DEPARTURE_GP ) {
@@ -366,6 +369,8 @@ int main() {
                 }
             }
             
+            updateVariables();
+            
             if ( gp_queue ) {
                 if (DEBUG) { printf("3.4.1\n"); }
 
@@ -406,6 +411,8 @@ int main() {
                 }
             }
             
+            updateVariables();
+            
             if ( as_queue ) {
                 if (DEBUG) { printf("3.4.2\n"); }
 
@@ -426,14 +433,7 @@ int main() {
         }
         
         
-        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
-        else { gp_busy = FALSE; }
-        
-        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
-        else { as_busy = FALSE; }
-        
-        if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
-        else { gp_filled = FALSE; }
+        updateVariables();
         
         
         if ( !gp_busy && gp_queue ) {
@@ -466,6 +466,8 @@ int main() {
             }
         }
         
+        updateVariables();
+        
         if ( !as_busy && as_queue ) {
             if (DEBUG) { printf("4.2\n"); }
        
@@ -481,14 +483,7 @@ int main() {
         
         event_list = remover(event_list);
         
-        if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
-        else { gp_busy = FALSE; }
-        
-        if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
-        else { as_busy = FALSE; }
-        
-        if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
-        else { gp_filled = FALSE; }
+        updateVariables();
     
     
         if (DEBUG && TRUE) {
@@ -689,5 +684,16 @@ void updateAverage(double timeDiff) {
     if ( timeDiff > ZERO ) { avgDelay += timeDiff; }
 
     return;
+}
+
+void updateVariables() {
+    if (lGP >= GP_CALL_OPERATORS) { gp_busy = TRUE; }
+    else { gp_busy = FALSE; }
+
+    if (lAS >= AS_CALL_OPERATORS) { as_busy = TRUE; }
+    else { as_busy = FALSE; }
+
+    if (nGP >= GP_QUEUE_LENGTH) { gp_filled = TRUE; }
+    else { gp_filled = FALSE; }
 }
 
