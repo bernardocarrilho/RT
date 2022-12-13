@@ -17,6 +17,9 @@
 #define GP_QUEUE_LENGTH 1
 #define NUMBER_OF_SAMPLES 10000
 
+#define DELAY_BINS 25
+#define DELTA 10
+
 
 
 ///////////////////
@@ -66,7 +69,7 @@
 #define AS_G_DEV 60*(1/3.0)
 
 #define AS_E_MIN 60*1
-#define AS_E_MAX 999//60*5 // No Limit? ///////////////////////////////////
+#define AS_E_MAX 999 // No Limit? ///////////////////////////////////
 #define AS_E_AVG 60*2.5
 
 
@@ -81,6 +84,7 @@ int seedAdjust;
 double avg;
 float avg_count;
 double avgDelay;
+int delay_histogram[DELAY_BINS];
 
 int gp_busy;
 int as_busy;
@@ -135,6 +139,7 @@ int main() {
     avgDelay = ZERO;
     double asAvg = ZERO;
     int asSampleNum = ZERO;
+    for (int i = 0; i < DELAY_BINS; i++) delay_histogram[i] = ZERO;
     
     initializeRandomSeed();
 
@@ -559,7 +564,12 @@ int main() {
     printf("P(Lost) = %f\n", probLost);
     printf("Delay (Average) = %f\n", avgDelay);
     printf("AS Delay (Average) = %f\n", asAvg);
+    printf("Delay Distribution = "); for (int i = 0; i < DELAY_BINS; i++) { printf("%d ", delay_histogram[i]); }
     printf("\n\n");
+    
+    FILE *file = fopen("delay_results.txt", "a");
+    fprintf(file, "%f\n", asAvg);
+    fclose(file);
 
     return 0;
 }
@@ -682,6 +692,17 @@ void updateAverage(double timeDiff) {
     avg = avg * ((avg_count-1)/avg_count) + (timeDiff) * (1/avg_count);
     
     if ( timeDiff > ZERO ) { avgDelay += timeDiff; }
+    
+    for (int i = 0; i < DELAY_BINS-1; i++) {
+    
+        if ( (timeDiff >= i*DELTA) && (timeDiff < (i+1)*DELTA) ) {
+        
+            delay_histogram[i] += 1;
+            break;
+        }
+    }
+    
+    if ( timeDiff >= (DELAY_BINS-1)*DELTA ) { delay_histogram[DELAY_BINS-1] += 1; }
 
     return;
 }
